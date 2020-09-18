@@ -16,6 +16,7 @@
 package com.tngtech.archunit.core.importer;
 
 import java.util.Collection;
+import java.util.HashSet;
 import java.util.List;
 import java.util.Map;
 import java.util.Set;
@@ -50,6 +51,7 @@ import com.tngtech.archunit.core.domain.JavaStaticInitializer;
 import com.tngtech.archunit.core.domain.JavaTypeVariable;
 import com.tngtech.archunit.core.domain.ThrowsDeclaration;
 import com.tngtech.archunit.core.importer.AccessRecord.FieldAccessRecord;
+import com.tngtech.archunit.core.importer.DomainBuilders.JavaAnnotationBuilder;
 import com.tngtech.archunit.core.importer.DomainBuilders.JavaConstructorCallBuilder;
 import com.tngtech.archunit.core.importer.DomainBuilders.JavaFieldAccessBuilder;
 import com.tngtech.archunit.core.importer.DomainBuilders.JavaMethodCallBuilder;
@@ -161,13 +163,38 @@ class ClassGraphCreator implements ImportContext {
     }
 
     private void completeAnnotationTypes() {
-        for (JavaClass javaClass : classes.getAllWithOuterClassesSortedBeforeInnerClasses()) {
-            if (javaClass.isAnnotation()) {
-                for (JavaMethod method : javaClass.getMethods()) {
-                    DomainObjectCreationContext.completeAnnotationDefaultValues(method, this);
-                }
+        Set<JavaClass> annotationTypes = resolveAnnotations();
+        for (JavaClass javaClass : annotationTypes) {
+            for (JavaMethod method : javaClass.getMethods()) {
+                DomainObjectCreationContext.completeAnnotationDefaultValues(method, this);
             }
         }
+    }
+
+    private Set<JavaClass> resolveAnnotations() {
+        Set<JavaClass> annotationTypes = new HashSet<>();
+        for (JavaClass javaClass : classes.getAllWithOuterClassesSortedBeforeInnerClasses()) {
+            if (javaClass.isAnnotation()) {
+                annotationTypes.add(javaClass);
+            }
+            annotationTypes.addAll(resolveAnnotationHierarchy(javaClass));
+        }
+        return annotationTypes;
+    }
+
+    private Set<JavaClass> resolveAnnotationHierarchy(JavaClass javaClass) {
+        Set<JavaClass> annotationTypes = new HashSet<>();
+        for (JavaAnnotationBuilder annotation : importRecord.getAnnotationsFor(javaClass)) {
+            String annotationName = annotation.getFullyQualifiedClassName();
+            boolean hadBeenPreviouslyResolved = classes.isPresent(annotationName);
+            JavaClass annotationType = classes.getOrResolve(annotationName);
+            annotationTypes.add(annotationType);
+
+            if (!hadBeenPreviouslyResolved) {
+                resolveAnnotationHierarchy(annotationType);
+            }
+        }
+        return annotationTypes;
     }
 
     private <T extends AccessRecord<?>, B extends RawAccessRecord> void tryProcess(
