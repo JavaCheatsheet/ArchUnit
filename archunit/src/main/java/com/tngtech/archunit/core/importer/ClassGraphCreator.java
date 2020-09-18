@@ -184,10 +184,9 @@ class ClassGraphCreator implements ImportContext {
 
     private Set<JavaClass> resolveAnnotationHierarchy(JavaClass javaClass) {
         Set<JavaClass> annotationTypes = new HashSet<>();
-        for (JavaAnnotationBuilder annotation : importRecord.getAnnotationsFor(javaClass)) {
-            String annotationName = annotation.getFullyQualifiedClassName();
-            boolean hadBeenPreviouslyResolved = classes.isPresent(annotationName);
-            JavaClass annotationType = classes.getOrResolve(annotationName);
+        for (String annotationTypeName : getAnnotationTypeNamesToResolveFor(javaClass)) {
+            boolean hadBeenPreviouslyResolved = classes.isPresent(annotationTypeName);
+            JavaClass annotationType = classes.getOrResolve(annotationTypeName);
             annotationTypes.add(annotationType);
 
             if (!hadBeenPreviouslyResolved) {
@@ -195,6 +194,19 @@ class ClassGraphCreator implements ImportContext {
             }
         }
         return annotationTypes;
+    }
+
+    private Set<String> getAnnotationTypeNamesToResolveFor(JavaClass javaClass) {
+        Set<String> annotationTypeNamesToResolve = new HashSet<>();
+        for (JavaAnnotationBuilder annotation : importRecord.getAnnotationsFor(javaClass)) {
+            annotationTypeNamesToResolve.add(annotation.getFullyQualifiedClassName());
+        }
+        for (JavaMember member : javaClass.getMembers()) {
+            for (JavaAnnotationBuilder annotation : importRecord.getAnnotationsFor(member)) {
+                annotationTypeNamesToResolve.add(annotation.getFullyQualifiedClassName());
+            }
+        }
+        return annotationTypeNamesToResolve;
     }
 
     private <T extends AccessRecord<?>, B extends RawAccessRecord> void tryProcess(
