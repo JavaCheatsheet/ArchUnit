@@ -36,13 +36,12 @@ public class JavaMethod extends JavaCodeUnit {
     private final Supplier<Method> methodSupplier;
     private final ThrowsClause<JavaMethod> throwsClause;
     private Supplier<Set<JavaMethodCall>> callsToSelf = Suppliers.ofInstance(Collections.<JavaMethodCall>emptySet());
-    private final Supplier<Optional<Object>> annotationDefaultValue;
+    private Optional<Object> annotationDefaultValue = Optional.absent();
 
     JavaMethod(DomainBuilders.JavaMethodBuilder builder) {
         super(builder);
         throwsClause = builder.getThrowsClause(this);
         methodSupplier = Suppliers.memoize(new ReflectMethodSupplier());
-        annotationDefaultValue = builder.getAnnotationDefaultValue();
     }
 
     @Override
@@ -60,7 +59,7 @@ public class JavaMethod extends JavaCodeUnit {
      */
     @PublicAPI(usage = ACCESS)
     public Optional<Object> getDefaultValue() {
-        return annotationDefaultValue.get();
+        return annotationDefaultValue;
     }
 
     @PublicAPI(usage = ACCESS)
@@ -104,6 +103,10 @@ public class JavaMethod extends JavaCodeUnit {
     @PublicAPI(usage = ACCESS)
     public String getDescription() {
         return "Method <" + getFullName() + ">";
+    }
+
+    void completeAnnotationDefaultValues(ImportContext context) {
+        annotationDefaultValue = context.createAnnotationDefaultValue(this);
     }
 
     void registerCallsToMethod(Supplier<Set<JavaMethodCall>> calls) {

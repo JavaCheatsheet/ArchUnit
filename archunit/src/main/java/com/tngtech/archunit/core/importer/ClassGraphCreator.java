@@ -25,6 +25,7 @@ import com.google.common.collect.ImmutableSet;
 import com.google.common.collect.Multimap;
 import com.google.common.collect.SetMultimap;
 import com.tngtech.archunit.base.Function;
+import com.tngtech.archunit.base.HasDescription;
 import com.tngtech.archunit.base.Optional;
 import com.tngtech.archunit.core.domain.AccessTarget;
 import com.tngtech.archunit.core.domain.AccessTarget.ConstructorCallTarget;
@@ -153,10 +154,18 @@ class ClassGraphCreator implements ImportContext {
     }
 
     private void completeAnnotations() {
+        completeAnnotationTypes();
         for (JavaClass javaClass : classes.getAllWithOuterClassesSortedBeforeInnerClasses()) {
             DomainObjectCreationContext.completeAnnotations(javaClass, this);
-            for (JavaMember member : javaClass.getMembers()) {
-                memberDependenciesByTarget.registerAnnotations(member.getAnnotations());
+        }
+    }
+
+    private void completeAnnotationTypes() {
+        for (JavaClass javaClass : classes.getAllWithOuterClassesSortedBeforeInnerClasses()) {
+            if (javaClass.isAnnotation()) {
+                for (JavaMethod method : javaClass.getMethods()) {
+                    DomainObjectCreationContext.completeAnnotationDefaultValues(method, this);
+                }
             }
         }
     }
@@ -309,10 +318,26 @@ class ClassGraphCreator implements ImportContext {
 
     @Override
     public Map<String, JavaAnnotation<JavaClass>> createAnnotations(JavaClass owner) {
-        Map<String, JavaAnnotation<JavaClass>> annotations =
-                buildAnnotations(owner, importRecord.getAnnotationsFor(owner.getName()), classes.byTypeName());
+        return createAnnotations(owner, importRecord.getAnnotationsFor(owner));
+    }
+
+    @Override
+    public Map<String, JavaAnnotation<JavaMember>> createAnnotations(JavaMember owner) {
+        return createAnnotations(owner, importRecord.getAnnotationsFor(owner));
+    }
+
+    private <OWNER extends HasDescription> Map<String, JavaAnnotation<OWNER>> createAnnotations(OWNER owner, Set<DomainBuilders.JavaAnnotationBuilder> annotationBuilders) {
+        Map<String, JavaAnnotation<OWNER>> annotations = buildAnnotations(owner, annotationBuilders, classes.byTypeName());
         memberDependenciesByTarget.registerAnnotations(annotations.values());
         return annotations;
+    }
+
+    @Override
+    public Optional<Object> createAnnotationDefaultValue(final JavaMethod javaMethod) {
+        Optional<DomainBuilders.JavaAnnotationBuilder.ValueBuilder> valueBuilder = importRecord.getAnnotationDefaultValueBuilderFor(javaMethod);
+        return valueBuilder.isPresent() ?
+                valueBuilder.get().build(javaMethod, classes.byTypeName()) :
+                Optional.absent();
     }
 
     @Override
